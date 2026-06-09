@@ -215,23 +215,40 @@ function NoticeEditor({ notice, onSave }) {
   );
 }
 
-// ── SUPERVISOR VIEW ───────────────────────────────────────────────────────────
-function SupervisorView({ todayShifts, onSubmit, notice }) {
-  const [activeShift,setActiveShift] = useState("ca1");
-  const [forms,setForms] = useState({
-    ca1:{...EMPTY_FORM,...(todayShifts.ca1||{})},
-    ca2:{...EMPTY_FORM,...(todayShifts.ca2||{})},
-    ca3:{...EMPTY_FORM,...(todayShifts.ca3||{})},
-  });
-  const [submitting,setSubmitting] = useState(false);
+// ── DATE OPTIONS ─────────────────────────────────────────────────────────────
+function getDateOptions() {
+  const opts = [];
+  const labels = ["Hôm nay","Hôm qua","Hôm trước"];
+  for(let i=0;i<3;i++){
+    const d = new Date(); d.setDate(d.getDate()-i);
+    opts.push({ key: d.toISOString().slice(0,10), label: labels[i] });
+  }
+  return opts;
+}
 
+// ── SUPERVISOR VIEW ───────────────────────────────────────────────────────────
+function SupervisorView({ history, onSubmit, notice }) {
+  const dateOptions = getDateOptions();
+  const [selectedDate, setSelectedDate] = useState(dateOptions[0].key);
+  const [activeShift, setActiveShift] = useState("ca1");
+  const [submitting, setSubmitting] = useState(false);
+
+  const dayShifts = history[selectedDate] || { ca1:{...EMPTY_FORM}, ca2:{...EMPTY_FORM}, ca3:{...EMPTY_FORM} };
+  const [forms, setForms] = useState({
+    ca1:{...EMPTY_FORM,...(dayShifts.ca1||{})},
+    ca2:{...EMPTY_FORM,...(dayShifts.ca2||{})},
+    ca3:{...EMPTY_FORM,...(dayShifts.ca3||{})},
+  });
+
+  // Reload forms when date changes
   useEffect(()=>{
+    const ds = history[selectedDate] || { ca1:{...EMPTY_FORM}, ca2:{...EMPTY_FORM}, ca3:{...EMPTY_FORM} };
     setForms({
-      ca1:{...EMPTY_FORM,...(todayShifts.ca1||{})},
-      ca2:{...EMPTY_FORM,...(todayShifts.ca2||{})},
-      ca3:{...EMPTY_FORM,...(todayShifts.ca3||{})},
+      ca1:{...EMPTY_FORM,...(ds.ca1||{})},
+      ca2:{...EMPTY_FORM,...(ds.ca2||{})},
+      ca3:{...EMPTY_FORM,...(ds.ca3||{})},
     });
-  },[todayShifts]);
+  },[selectedDate, history]);
 
   const cur = forms[activeShift];
   const isDone = !!cur.submittedAt;
@@ -242,7 +259,7 @@ function SupervisorView({ todayShifts, onSubmit, notice }) {
     if (!cur.supervisor) return;
     setSubmitting(true);
     const updated = {...cur, submittedAt:nowStr()};
-    await onSubmit(activeShift, updated);
+    await onSubmit(activeShift, updated, selectedDate);
     setForms(p=>({...p,[activeShift]:updated}));
     setSubmitting(false);
   };
@@ -250,6 +267,32 @@ function SupervisorView({ todayShifts, onSubmit, notice }) {
   return (
     <div>
       <NoticeDisplay notice={notice}/>
+
+      {/* Date selector */}
+      <div style={{marginBottom:14}}>
+        <div style={{fontSize:11,fontWeight:700,color:"#64748B",textTransform:"uppercase",letterSpacing:0.8,marginBottom:8}}>📅 Chọn ngày giao ca</div>
+        <div style={{display:"flex",gap:8}}>
+          {dateOptions.map(opt=>{
+            const isSel = opt.key===selectedDate;
+            const dc = SHIFTS.filter(s=>(history[opt.key]||{})[s.id]?.submittedAt).length;
+            return (
+              <button key={opt.key} onClick={()=>setSelectedDate(opt.key)} style={{
+                flex:1, padding:"9px 8px", borderRadius:10, border:"none", cursor:"pointer",
+                background:isSel?"#1E3A5F":"#fff",
+                color:isSel?"#fff":"#475569",
+                fontWeight:isSel?700:500, fontSize:13,
+                boxShadow:isSel?"0 4px 12px rgba(30,58,95,0.3)":"0 1px 4px rgba(0,0,0,0.08)",
+                transition:"all 0.15s", textAlign:"center",
+              }}>
+                <div>{opt.label}</div>
+                <div style={{fontSize:10,color:isSel?"rgba(255,255,255,0.65)":"#94A3B8",marginTop:2}}>{fmtDateShort(opt.key)}</div>
+                <div style={{fontSize:10,marginTop:3,color:isSel?"#86EFAC":dc===3?"#16A34A":"#94A3B8",fontWeight:600}}>{dc}/3 ca</div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       <div style={{display:"flex",gap:8,marginBottom:16}}>
         {SHIFTS.map(s=>{
           const done=!!forms[s.id].submittedAt;
@@ -272,7 +315,7 @@ function SupervisorView({ todayShifts, onSubmit, notice }) {
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
           <div>
             <div style={{fontWeight:800,fontSize:16,color:"#1E3A5F"}}>{shift.icon} {shift.label} · {shift.time}</div>
-            <div style={{fontSize:11,color:"#94A3B8",marginTop:1}}>{fmtDate(todayKey())}</div>
+            <div style={{fontSize:11,color:"#94A3B8",marginTop:1}}>{fmtDate(selectedDate)}</div>
           </div>
           <Pill done={isDone}/>
         </div>
@@ -510,8 +553,8 @@ export default function App() {
   useEffect(()=>{ loadData(); },[loadData]);
 
   // Save shift to Supabase
-  const handleShiftSubmit = async (caId, data) => {
-    const dk = todayKey();
+  const handleShiftSubmit = async (caId, data, dateKey) => {
+    const dk = dateKey || todayKey();
     await supabase.from("shifts").upsert(
       { date_key:dk, shift_id:caId, data, updated_at:new Date().toISOString() },
       { onConflict:"date_key,shift_id" }
@@ -580,7 +623,7 @@ export default function App() {
             <ManagerView history={history}/>
           </>
         ) : (
-          <SupervisorView todayShifts={todayShifts} onSubmit={handleShiftSubmit} notice={notice}/>
+          <SupervisorView history={history} onSubmit={handleShiftSubmit} notice={notice}/>
         )}
       </div>
     </div>
