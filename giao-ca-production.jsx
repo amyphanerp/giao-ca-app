@@ -18,7 +18,9 @@ const SECTIONS = [
 const EMPTY_FORM = { mayMoc:"", vatTu:"", quyTrinh:"", conNguoi:"", deXuat:"", images:[], submittedAt:null, supervisor:"" };
 const EMPTY_NOTICE = { text:"", images:[], posted_at:null };
 
-function todayKey() { return new Date().toISOString().slice(0,10); }
+function todayKey() {
+  return new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Ho_Chi_Minh" });
+}
 function nowStr() { return new Date().toLocaleTimeString("vi-VN",{hour:"2-digit",minute:"2-digit"}); }
 function fmtDate(key) {
   const d = new Date(key+"T00:00:00");
@@ -218,10 +220,10 @@ function NoticeEditor({ notice, onSave }) {
 // ── DATE OPTIONS ─────────────────────────────────────────────────────────────
 function getDateOptions() {
   const opts = [];
-  const labels = ["Hôm nay","Hôm qua","Hôm trước"];
   for(let i=0;i<3;i++){
-    const d = new Date(); d.setDate(d.getDate()-i);
-    opts.push({ key: d.toISOString().slice(0,10), label: labels[i] });
+    const d = new Date();
+    d.setDate(d.getDate()-i);
+    opts.push({ key: d.toLocaleDateString("sv-SE", { timeZone:"Asia/Ho_Chi_Minh" }) });
   }
   return opts;
 }
@@ -284,8 +286,7 @@ function SupervisorView({ history, onSubmit, notice }) {
                 boxShadow:isSel?"0 4px 12px rgba(30,58,95,0.3)":"0 1px 4px rgba(0,0,0,0.08)",
                 transition:"all 0.15s", textAlign:"center",
               }}>
-                <div>{opt.label}</div>
-                <div style={{fontSize:10,color:isSel?"rgba(255,255,255,0.65)":"#94A3B8",marginTop:2}}>{fmtDateShort(opt.key)}</div>
+                <div style={{fontSize:14,fontWeight:700}}>{fmtDateShort(opt.key)}</div>
                 <div style={{fontSize:10,marginTop:3,color:isSel?"#86EFAC":dc===3?"#16A34A":"#94A3B8",fontWeight:600}}>{dc}/3 ca</div>
               </button>
             );
